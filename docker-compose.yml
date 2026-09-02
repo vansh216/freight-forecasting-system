@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:18
+    container_name: freight_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: freight_user
+      POSTGRES_PASSWORD: freight_pass
+      POSTGRES_DB: freight_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
