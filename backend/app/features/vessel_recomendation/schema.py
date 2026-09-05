@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 class VesselRequestSchema(BaseModel):
     origin: str
     destination: str
-    cargo_type: str
+    cargo_type: Optional[str] = None
     cargo_quantity: float = Field(..., gt=0)
     vessel_preference: str = "automatic"
 
@@ -27,3 +27,4 @@ class VesselRecommendationSchema(BaseModel):
     recommended_vessel: Optional[str]
     ranked_vessels: list[VesselCandidate]
     reasons: list[str]
+    error: Optional[str] = None
