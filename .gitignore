@@ -1,0 +1,61 @@
+# ---------- Environment ----------
+.env
+.env.local
+.env.*.local
+
+# ---------- Python (backend + ml) ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# uv
+uv.lock.tmp
+
+# ---------- ML model artifacts ----------
+ml/forecasting/model_store/*.pkl
+ml/forecasting/model_store/*.joblib
+*.ipynb_checkpoints/
+
+# ---------- Node / React (frontend) ----------
+node_modules/
+frontend/dist/
+frontend/build/
+.npm/
+.eslintcache
+*.tsbuildinfo
+
+# ---------- Docker ----------
+docker-compose.override.yml
+
+# ---------- Database ----------
+*.sqlite3
+*.db
+pgdata/
+
+# ---------- IDE / Editor ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---------- Logs ----------
+*.log
+logs/
+
+# ---------- OS files ----------
+.DS_Store
+desktop.ini
