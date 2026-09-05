@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from backend.database.database import get_db
 from backend.database import crud
-from backend.schemas.forecast_schema import ForecastRequestSchema
-from backend.services.forecasting_service import generate_forecast, market_entry_signal
+from backend.schema import ForecastRequestSchema
+from backend.service import generate_forecast, market_entry_signal
 from backend.utils.validation import validate_origin, validate_destination, validate_vessel_type, validate_cargo_quantity
 
 router = APIRouter(prefix="/api/forecast", tags=["forecast"])

@@ -23,7 +23,6 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-
 from backend.database.reference_data import BASE_FREIGHT_RATES, DATA_SOURCE_LABEL
 from ml.preprocessing.feature_engineering import build_inference_features
 
