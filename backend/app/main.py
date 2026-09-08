@@ -9,12 +9,16 @@ from backend.app.shared.aisstream_client import stream_ais_data   # ADD THIS
 
 from backend.app.features.arrival_board.models import VesselArrival
 from backend.app.features.arrival_board.router import router as arrival_router
+from backend.app.features.freight_forecast.router import router as freight_router
+from backend.app.features.vessel_recomendation.router import router as vessel_recmdtion
+from backend.app.api import vessel, charter,risk,ports,meta
+
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    asyncio.create_task(stream_ais_data())    # ADD THIS LINE
+    asyncio.create_task(stream_ais_data())    
     yield
 
 
@@ -44,3 +48,11 @@ def health_check():
 
 
 app.include_router(arrival_router, prefix="/api", tags=["Arrival Board"])
+app.include_router(freight_router,prefix='/api', tags=["freight_forecast"])
+app.include_router(vessel_recmdtion,prefix='/api', tags=["vessel_recommedation"])
+
+app.include_router(vessel.router)
+app.include_router(charter.router)
+app.include_router(risk.router)
+app.include_router(ports.router)
+app.include_router(meta.router)
