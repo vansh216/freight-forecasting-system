@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from backend.database.reference_data import (
+from data.reference_data import (
     DESTINATION_PORTS, ORIGIN_PORTS, VESSEL_CLASSES,
 )
 

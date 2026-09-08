@@ -6,7 +6,7 @@ Keeping this module side-effect free makes it independently testable.
 
 from __future__ import annotations
 
-from backend.database.reference_data import (
+from data.reference_data import (
     ORIGIN_PORTS,
     BUNKER_PRICE_USD_PER_TONNE,
     PORT_COST_USD_PER_DAY,
