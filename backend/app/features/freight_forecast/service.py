@@ -2,100 +2,194 @@
 Freight forecasting service.
 
 Contract:
-    - If a trained model exists at models/freight_forecasting_model.pkl (+ scaler),
-      it is loaded via joblib and used for prediction.
-    - If it does not exist (fresh clone, before ml/training has been run),
-      the service transparently falls back to a statistical method
-      (exponential smoothing over a synthetic/demo historical series) and
-      labels the result `is_fallback=True`, `model_used="Fallback: Exponential Smoothing"`.
+    - If a trained CatBoost model exists at models/catboost_freight_model.cbm,
+      it is loaded via CatBoostRegressor.load_model() and used for prediction,
+      via the recursive lag1/lag7/lag30 method (adapted from the training
+      notebook), scoped to the specific vessel_type + source + destination
+      route requested.
+    - Historical data is ALWAYS the real dataset (see `_load_historical_dataframe`
+      below) — nothing is synthesized. If no history exists at all for the
+      requested route, a ValueError is raised so the API layer can return a
+      clean 404/422 instead of fabricating numbers.
+    - If the trained model file is missing/corrupt, OR the route has fewer than
+      30 historical points (not enough for lag30), the service falls back to
+      exponential smoothing computed on that SAME real historical series, and
+      labels the result `is_fallback=True`, `model_used="Fallback: Exponential
+      Smoothing"`.
     - The frontend/API must never claim a fallback result is an ML prediction.
+    - Response SHAPE is unchanged from the previous version of this module —
+      only the data source (real vs synthetic) and the model backend
+      (CatBoost vs the old sklearn/joblib model) have changed.
 
-This keeps the interface stable: swap in a real trained model later without
-touching the API or frontend contract.
+NOTE ON `_load_historical_dataframe`:
+    I don't know where your real freight history actually lives (a CSV, a
+    DB table, a data warehouse query, etc.), so this defaults to reading a
+    CSV at `data/freight_history.csv` with columns
+    [date, vessel_type, source, destination, price]. Point
+    HISTORICAL_DATA_PATH at your real file, or replace the body of
+    `_load_historical_dataframe()` with your actual DB/query call — the rest
+    of the module only depends on it returning a DataFrame with those columns.
 """
 
 from __future__ import annotations
 
 import math
-import random
-from datetime import datetime, timedelta
+from datetime import date as _date
 from pathlib import Path
 from typing import Optional
+
 import numpy as np
+import pandas as pd
+import traceback
 
-from data.reference_data import BASE_FREIGHT_RATES, DATA_SOURCE_LABEL
-from ml.preprocessing.feature_engineering import build_inference_features
+DATA_SOURCE_LABEL = "Synthetic"
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+MODELS_DIR = PROJECT_ROOT / "ml" / "model"
+FREIGHT_MODEL_PATH = MODELS_DIR / "catboost_freight_model.cbm"
 
-MODELS_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent / "ml" / "model"
-# backend\app\features\freight_forecast\service.py
-FREIGHT_MODEL_PATH = MODELS_DIR / "freight_forecasting_model.pkl"
-SCALER_PATH = MODELS_DIR / "scaler.pkl"
+# Real historical freight dataset path for this project.
+HISTORICAL_DATA_PATH = PROJECT_ROOT / "data" / "freight_history.csv"
 
 HORIZONS = [7, 15, 30, 60, 90]
 
+# Column order the model was trained on (matches the notebook: date features
+# first, then the three lags), after dropping the raw "date" column itself.
+FEATURE_ORDER = [
+    "vessel_type", "source", "destination",
+    "month", "weekday", "quarter", "day_of_year",
+    "lag1", "lag7", "lag30",
+]
+
+
+def _load_historical_dataframe() -> pd.DataFrame:
+    """
+    Load the REAL historical freight dataset.
+
+    Expected columns: date, vessel_type, source, destination, price.
+    Replace this body with your actual data source if it isn't a CSV at
+    HISTORICAL_DATA_PATH.
+    """
+    if not HISTORICAL_DATA_PATH.exists():
+        raise FileNotFoundError(
+            f"Historical freight data not found at {HISTORICAL_DATA_PATH}. "
+            "Update HISTORICAL_DATA_PATH or _load_historical_dataframe() to "
+            "point at your real dataset."
+        )
+    df = pd.read_csv(HISTORICAL_DATA_PATH, parse_dates=["date"])
+    return df
+
 
 class FreightForecastModel:
-    """Thin wrapper that hides whether we're using a trained model or fallback."""
+    """Thin wrapper that hides whether we're using the trained CatBoost model or fallback."""
 
     def __init__(self) -> None:
         self._model = None
-        self._scaler = None
         self._is_loaded = False
         self._try_load()
 
     def _try_load(self) -> None:
         if FREIGHT_MODEL_PATH.exists():
             try:
-                import joblib
-                self._model = joblib.load(FREIGHT_MODEL_PATH)
-                if SCALER_PATH.exists():
-                    self._scaler = joblib.load(SCALER_PATH)
+                from catboost import CatBoostRegressor
+                model = CatBoostRegressor()
+                model.load_model(str(FREIGHT_MODEL_PATH))
+                self._model = model
                 self._is_loaded = True
-            except Exception:
-                # Corrupt/incompatible model file -> fall back, never crash the app
+            except Exception as e:
+                print(f"[FreightForecastModel] load_model failed: {e!r}")
+                traceback.print_exc()
                 self._model = None
                 self._is_loaded = False
+        else:
+            print(f"[FreightForecastModel] model file not found at {FREIGHT_MODEL_PATH}")
 
     @property
     def is_loaded(self) -> bool:
         return self._is_loaded
 
-    def predict(self, history: list[float], vessel_type) -> Optional[dict]:
-        """Return None if no trained model is available (caller should fall back)."""
+    def predict_recursive(
+        self,
+        route_history: pd.DataFrame,
+        vessel_type: str,
+        source: str,
+        destination: str,
+        start_date: str,
+        horizon: int,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Recursive multi-day forecast using lag1/lag7/lag30 features, same logic
+        as `predict_freight` in the training notebook. Returns None (caller
+        should fall back) if there's no model or not enough route history.
+        """
         if not self._is_loaded or self._model is None:
             return None
+        if len(route_history) < 30:
+            # Not enough history for lag30 -> trained model isn't usable here
+            return None
+
         try:
-            import pandas as pd
-            from ml.preprocessing.feature_engineering import FEATURE_COLS
-            row = build_inference_features(history,vessel_type)
-            x = pd.DataFrame([row], columns=FEATURE_COLS)
-            if self._scaler is not None:
-                x = self._scaler.transform(x)
-            pred = float(self._model.predict(x)[0])
-            return {"predicted_rate": pred}
-        except Exception:
+            last_history = route_history.sort_values("date").iloc[-30:]
+            lag1 = float(last_history.iloc[-1]["price"])
+            lag7 = float(last_history.iloc[-7]["price"])
+            lag30 = float(last_history.iloc[-30]["price"])
+
+            future_dates = pd.date_range(start=start_date, periods=horizon, freq="D")
+            preds = []
+            for d in future_dates:
+                row = {
+                    "vessel_type": vessel_type,
+                    "source": source,
+                    "destination": destination,
+                    "month": d.month,
+                    "weekday": d.weekday(),
+                    "quarter": d.quarter,
+                    "day_of_year": d.dayofyear,
+                    "lag1": lag1,
+                    "lag7": lag7,
+                    "lag30": lag30,
+                }
+                features = pd.DataFrame([row], columns=FEATURE_ORDER)
+                pred = float(self._model.predict(features)[0])
+                preds.append(pred)
+
+                # shift lags forward for the next recursive step
+                lag30 = lag7
+                lag7 = lag1
+                lag1 = pred
+
+            return pd.DataFrame({"date": future_dates, "predicted_price": preds})
+        except Exception as e:
+            print(f"[predict_recursive] failed for route "
+                  f"{vessel_type}/{source}/{destination}: {e!r}")
+            traceback.print_exc()
             return None
 
 
 _freight_model = FreightForecastModel()
 
 
-def _synthetic_history(vessel_type: str, days: int = 180, seed: Optional[int] = None) -> list[float]:
-    """Generate a plausible demo freight-rate history (random walk + seasonality)."""
-    base = BASE_FREIGHT_RATES.get(vessel_type, 20.0)
-    rng = random.Random(seed or hash(vessel_type) % (2**31))
-    series = [base]
-    for day in range(1, days):
-        seasonal = 0.6 * math.sin(2 * math.pi * day / 90)
-        noise = rng.gauss(0, base * 0.015)
-        drift = rng.uniform(-0.02, 0.02)
-        next_val = series[-1] * (1 + drift * 0.02) + seasonal * 0.05 + noise
-        series.append(max(next_val, base * 0.4))
-    return series
+def _load_route_history(vessel_type: str, source: str, destination: str) -> list[float]:
+    """
+    Return the REAL price history for this exact route, oldest -> newest.
+    Raises ValueError if no data exists for the route — never fabricated.
+    """
+    df = _load_historical_dataframe()
+    route = df[
+        (df["vessel_type"] == vessel_type)
+        & (df["source"] == source)
+        & (df["destination"] == destination)
+    ].sort_values("date")
+
+    if route.empty:
+        raise ValueError(
+            f"No historical freight data found for vessel_type='{vessel_type}', "
+            f"source='{source}', destination='{destination}'."
+        )
+    return route["price"].astype(float).tolist()
 
 
 def _exponential_smoothing_forecast(history: list[float], horizon_days: int, alpha: float = 0.3) -> dict:
-    """Simple/robust fallback: exponential smoothing + volatility-based confidence band."""
+    """Fallback: exponential smoothing + volatility-based confidence band, run on REAL history."""
     level = history[0]
     for val in history[1:]:
         level = alpha * val + (1 - alpha) * level
@@ -105,7 +199,6 @@ def _exponential_smoothing_forecast(history: list[float], horizon_days: int, alp
     mean_recent = float(np.mean(recent))
     cv = volatility / mean_recent if mean_recent else 0
 
-    # slight trend estimate from last 30 vs previous 30
     if len(history) >= 60:
         trend_slope = (np.mean(history[-30:]) - np.mean(history[-60:-30])) / 30
     else:
@@ -133,38 +226,68 @@ def _exponential_smoothing_forecast(history: list[float], horizon_days: int, alp
     }
 
 
-def generate_forecast(vessel_type: str, forecast_horizon: int = 30) -> dict:
+def generate_forecast(
+    vessel_type: str,
+    source: str,
+    destination: str,
+    forecast_horizon: int = 30,
+    start_date: Optional[str] = None,
+) -> dict:
     """
     Main entry point used by the API layer.
 
-    Returns a dict matching ForecastResponseSchema fields (minus request-specific ones).
+    vessel_type / source / destination now fully determine which real route's
+    history is used (previously source/destination were ignored and history
+    was synthesized). Returns a dict matching ForecastResponseSchema fields —
+    same shape as before this change.
     """
-    history = _synthetic_history(vessel_type)
+    start_date = start_date or _date.today().isoformat()
+
+    df = _load_historical_dataframe()
+    route_history_df = df[
+        (df["vessel_type"] == vessel_type)
+        & (df["source"] == source)
+        & (df["destination"] == destination)
+    ].sort_values("date")
+
+    history = _load_route_history(vessel_type, source, destination)
     current_rate = round(history[-1], 2)
 
-    # Attempt trained-model prediction first (feature schema shared with ml/training via
-    # ml/preprocessing/feature_engineering.py so a trained model is actually usable here)
-    model_pred = _freight_model.predict(history,vessel_type)
+    model_forecast_df = _freight_model.predict_recursive(
+        route_history_df, vessel_type, source, destination, start_date, max(HORIZONS)
+    )
+    ### to check if catboosting actually predicting or not
+    print(model_forecast_df)
+    is_fallback = model_forecast_df is None
 
     horizons = []
     for h in HORIZONS:
         stat = _exponential_smoothing_forecast(history, h)
-        horizons.append({
-            "days": h,
-            "expected_rate": stat["expected_rate"],
-            "lower_bound": stat["lower_bound"],
-            "upper_bound": stat["upper_bound"],
-        })
+        if not is_fallback:
+            expected = round(float(model_forecast_df.iloc[h - 1]["predicted_price"]), 2)
+            band = stat["upper_bound"] - stat["expected_rate"]
+            horizons.append({
+                "days": h,
+                "expected_rate": expected,
+                "lower_bound": round(max(expected - band, 0), 2),
+                "upper_bound": round(expected + band, 2),
+            })
+        else:
+            horizons.append({
+                "days": h,
+                "expected_rate": stat["expected_rate"],
+                "lower_bound": stat["lower_bound"],
+                "upper_bound": stat["upper_bound"],
+            })
 
     primary_horizon_stat = _exponential_smoothing_forecast(history, forecast_horizon)
 
-    is_fallback = model_pred is None
     if is_fallback:
         forecast_rate = primary_horizon_stat["expected_rate"]
-        model_used = "Fallback: Exponential Smoothing (Demo Data)"
+        model_used = "Fallback: Exponential Smoothing"
     else:
-     forecast_rate = round(model_pred["predicted_rate"], 2)
-     model_used = "Trained Model: freight_forecasting_model.pkl"
+        forecast_rate = round(float(model_forecast_df.iloc[forecast_horizon - 1]["predicted_price"]), 2)
+        model_used = "Trained Model: catboost_freight_model.cbm"
 
     change_pct = ((forecast_rate - current_rate) / current_rate * 100) if current_rate else 0
     if change_pct > 2:
