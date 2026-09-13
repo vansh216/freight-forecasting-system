@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from datetime import date
 
 from backend.app.core.database import get_db
 
@@ -21,7 +22,7 @@ def forecast(payload: ForecastRequestSchema, db: Session = Depends(get_db)):
     validate_cargo_quantity(payload.cargo_quantity)
 
     vessel_type = payload.vessel_type if payload.vessel_type != "automatic" else "Supramax"
-    result = generate_forecast(vessel_type, payload.forecast_horizon)
+    result = generate_forecast(payload.vessel_type,payload.origin,payload.destination,payload.forecast_horizon, date.today().isoformat())
     entry = market_entry_signal(result)
 
     req = crud.save_forecast_request(db, payload.model_dump())
