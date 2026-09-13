@@ -12,6 +12,9 @@ dependencies = [
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "websockets>=16.1.1",
+    "numpy>=2.2.6",
+    "pandas>=2.3.3",
+    "joblib>=1.6.0",
 ]
 
 [tool.uv]
