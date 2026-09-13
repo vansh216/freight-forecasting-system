@@ -51,7 +51,7 @@ def rank_vessels(origin: str, destination: str, cargo_type: str, cargo_quantity:
     candidates = []
     for vessel_type, vessel in VESSEL_CLASSES.items():
         compat = check_port_compatibility(vessel_type, destination)
-        forecast = generate_forecast(vessel_type, forecast_horizon=30)
+        forecast = generate_forecast(vessel_type,origin,destination, forecast_horizon=30)
         freight_rate = forecast["current_rate"]
 
         reasons = []
