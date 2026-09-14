@@ -11,6 +11,7 @@ from backend.app.features.arrival_board.models import VesselArrival
 from backend.app.features.arrival_board.router import router as arrival_router
 from backend.app.features.freight_forecast.router import router as freight_router
 from backend.app.features.vessel_recomendation.router import router as vessel_recmdtion
+from backend.app.features.live_map.router import router as live_map_router
 from backend.app.api import vessel, charter,risk,ports,meta
 
 
@@ -50,6 +51,7 @@ def health_check():
 app.include_router(arrival_router, prefix="/api", tags=["Arrival Board"])
 app.include_router(freight_router,prefix='/api', tags=["freight_forecast"])
 app.include_router(vessel_recmdtion,prefix='/api', tags=["vessel_recommedation"])
+app.include_router(live_map_router, tags=["Live Map"])
 
 app.include_router(vessel.router)
 app.include_router(charter.router)
