@@ -15,6 +15,7 @@ dependencies = [
     "numpy>=2.2.6",
     "pandas>=2.3.3",
     "joblib>=1.6.0",
+    "catboost>=1.2.10",
 ]
 
 [tool.uv]
