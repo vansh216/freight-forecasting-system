@@ -6,7 +6,7 @@ from datetime import datetime
 from backend.app.core.config import settings
 from backend.app.core.database import SessionLocal
 from backend.app.features.arrival_board.models import VesselArrival
-from backend.app.features.arrival_board.port_bounds import get_port_for_coordinates, PORT_BOUNDING_BOXES
+from backend.app.features.arrival_board.port_bounds import get_port_for_coordinates, SUBSCRIPTION_BOX
 
 
 async def stream_ais_data():
@@ -19,9 +19,9 @@ async def stream_ais_data():
 
     # Combine all 3 port bounding boxes into one subscription area
     bounding_boxes = [[
-        [box["lat_min"], box["lon_min"]],
-        [box["lat_max"], box["lon_max"]]
-    ] for box in PORT_BOUNDING_BOXES.values()]
+    [SUBSCRIPTION_BOX["lat_min"], SUBSCRIPTION_BOX["lon_min"]],
+    [SUBSCRIPTION_BOX["lat_max"], SUBSCRIPTION_BOX["lon_max"]],
+]]
 
     subscribe_message = {
         "APIKey": settings.aisstream_api_key,
@@ -56,9 +56,9 @@ async def stream_ais_data():
     url = "wss://stream.aisstream.io/v0/stream"
 
     bounding_boxes = [[
-        [box["lat_min"], box["lon_min"]],
-        [box["lat_max"], box["lon_max"]]
-    ] for box in PORT_BOUNDING_BOXES.values()]
+    [SUBSCRIPTION_BOX["lat_min"], SUBSCRIPTION_BOX["lon_min"]],
+    [SUBSCRIPTION_BOX["lat_max"], SUBSCRIPTION_BOX["lon_max"]],
+]]
 
     subscribe_message = {
         "APIKey": settings.aisstream_api_key,
@@ -84,7 +84,7 @@ async def stream_ais_data():
                 vessel_name = meta.get("ShipName", "Unknown").strip()
 
                 port = get_port_for_coordinates(lat, lon)
-                print(f">>> Ship {vessel_name} at ({lat},{lon}) -> matched port: {port}")  # ADD THIS
+                print(f">>> Ship {vessel_name} at ({lat},{lon}) -> matched port: {port}") 
 
                 if port is None:
                     continue
