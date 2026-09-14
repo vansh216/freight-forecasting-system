@@ -4,8 +4,8 @@ import Footer from "./shared/components/Footer";
 import LandingPage from "./pages/landingPage.jsx";
 import VesselRecommendationPage from "./pages/VesselRecommendationPage";
 import ForecastPage from "./pages/ForecastPage";
-import ArrivalBoardPage from "./pages/ArrivalBoardPage";
-// import LiveMapPage from "./pages/LiveMapPage";
+import ArrivalBoardPage from "./pages/ArrivalBoardPage.jsx";
+import LiveMapPage from "./pages/LiveMapPage.jsx";
 
 function App() {
   return (
@@ -18,7 +18,7 @@ function App() {
             <Route path="/vessel-recommendation" element={<VesselRecommendationPage />} />
             <Route path="/forecast" element={<ForecastPage />} />
             <Route path="/arrivals" element={<ArrivalBoardPage />} />
-            {/* <Route path="/live-map" element={<LiveMapPage />} /> */}
+            <Route path="/live-map" element={<LiveMapPage />} />
           </Routes>
         </main>
         <Footer />
