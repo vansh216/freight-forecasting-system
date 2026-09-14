@@ -3,11 +3,11 @@ import { RefreshCw } from "lucide-react";
 import ArrivalTable from "../features/arrival-board/ArrivalTable";
 import { getArrivals } from "../features/arrival-board/api";
 
-const PORTS = ["All Ports", "Paradip", "Vizag", "Gangavaram"];
-const REFRESH_INTERVAL_MS = 5000*60; // auto-refresh every 15s, since this is "live" data
+const PORTS = ["Paradip", "Visakhapatnam", "Gangavaram","Gopalpur","Dhamra","Haldia"];
+const REFRESH_INTERVAL_MS = 5000*60; // auto-refresh every 5min, since this is "live" data
 
 export default function ArrivalBoardPage() {
-  const [selectedPort, setSelectedPort] = useState("All Ports");
+  const [selectedPort, setSelectedPort] = useState("Paradip");
   const [arrivals, setArrivals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
