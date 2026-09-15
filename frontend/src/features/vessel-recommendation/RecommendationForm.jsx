@@ -14,13 +14,59 @@ export default function RecommendationForm({ onResult }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  function getErrorMessage(err) {
+    // Axios-style error with a response from the server
+    if (err.response) {
+      const status = err.response.status;
+      const serverMessage =
+        err.response.data?.message ||
+        err.response.data?.error ||
+        (typeof err.response.data === "string" ? err.response.data : null);
+
+      if (status === 400) {
+        return serverMessage || "Invalid input. Please check the form and try again.";
+      }
+      if (status === 401 || status === 403) {
+        return "You're not authorized to perform this action.";
+      }
+      if (status === 404) {
+        return "Recommendation service not found. Please contact support.";
+      }
+      if (status === 429) {
+        return "Too many requests. Please wait a moment and try again.";
+      }
+      if (status >= 500) {
+        return serverMessage || "Server error. Please try again in a moment.";
+      }
+      return serverMessage || `Request failed (${status})`;
+    }
+
+    // Axios-style error where the request was made but no response was received
+    if (err.request) {
+      return "No response from server. Is the backend running?";
+    }
+
+    // Fetch API abort / timeout
+    if (err.name === "AbortError") {
+      return "The request timed out. Please try again.";
+    }
+
+    // Fetch API network failure
+    if (err instanceof TypeError) {
+      return "Network error. Please check your connection and try again.";
+    }
+
+    // Fallback
+    return err.message || "Something went wrong. Please try again.";
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
       const data = await getVesselRecommendation({
-       cargo_quantity: Number(cargoQty),
+        cargo_quantity: Number(cargoQty),
         origin,
         destination,
         type: vesselType,
@@ -28,11 +74,8 @@ export default function RecommendationForm({ onResult }) {
 
       onResult(data);
     } catch (err) {
-      setError(
-        err.response
-          ? `Request failed (${err.response.status})`
-          : "Something went wrong. Is the backend running?"
-      );
+      console.error("Vessel recommendation request failed:", err);
+      setError(getErrorMessage(err));
       onResult(null);
     } finally {
       setLoading(false);
