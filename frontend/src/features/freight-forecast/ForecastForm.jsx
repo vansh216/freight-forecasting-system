@@ -5,7 +5,7 @@ import { getForecast } from "./api";
 
 const ORIGIN_PORTS = ["Australia", "Indonesia","USA", "Mozambique", "Russia" ];
 const DESTINATION_PORTS = ["Paradip", "Visakhapatnam", "Gangavaram","Gopalpur","Dhamra","Sagar/Sandheads","Haldia"];
-const VESSEL_TYPES = ["automatic", "Handysize", "Supramax", "Panamax", "Capesize"];
+const VESSEL_TYPES = ["Handysize", "Supramax", "Panamax", "Capesize"];
 const HORIZON = [30,60,90];
 
 export default function ForecastForm({ onResult }) {
@@ -13,7 +13,7 @@ export default function ForecastForm({ onResult }) {
   const [destination, setDestination] = useState(DESTINATION_PORTS[0]);
   const [cargoType, setCargoType] = useState("Coal");
   const [cargoQty, setCargoQty] = useState(55000);
-  const [vesselType, setVesselType] = useState("automatic");
+  const [vesselType, setVesselType] = useState("Handysize");
   const [horizon, setHorizon] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
